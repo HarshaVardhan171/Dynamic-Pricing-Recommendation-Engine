@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 # Load Data
 def load_data():
-    df = pd.read_excel("Dynamic Pricing Engine.xlsx")
+    df = pd.read_excel("Dynamic Pricing Engine.xlsx", engine="openpyxl")
     df.columns = df.columns.str.strip().str.replace(' ', '_').str.lower()
     df['revenue'] = df['final_price'] * df['units_sold']
     df['date'] = pd.to_datetime(df['date'])
