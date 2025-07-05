@@ -37,8 +37,8 @@ To assist online retailers in **optimizing product pricing strategies** using da
 ## 📁 Project Structure
 
 ```bash
-├── app.py                         # Streamlit app file
-├── eda_modeling.ipynb            # ML/EDA notebook (optional)
-├── Dynamic Pricing Engine Dataset.csv # Simulated dataset (via Mockaroo)
-├── requirements.txt              # Libraries needed for deployment
-└── README.md                     # You're here!
+├── app.py                                # Streamlit app file
+├── eda_modeling.ipynb                    # ML/EDA notebook
+├── Dynamic Pricing Engine Dataset.csv    # Simulated dataset (via Mockaroo)
+├── requirements.txt                      # Libraries needed for deployment
+└── README.md                             # You're here!
