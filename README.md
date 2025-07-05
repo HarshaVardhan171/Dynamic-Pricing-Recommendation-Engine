@@ -39,6 +39,6 @@ To assist online retailers in **optimizing product pricing strategies** using da
 ```bash
 ├── app.py                         # Streamlit app file
 ├── eda_modeling.ipynb            # ML/EDA notebook (optional)
-├── amazon_pricing_simulation.csv # Simulated dataset (via Mockaroo)
+├── Dynamic Pricing Engine Dataset.csv # Simulated dataset (via Mockaroo)
 ├── requirements.txt              # Libraries needed for deployment
 └── README.md                     # You're here!
