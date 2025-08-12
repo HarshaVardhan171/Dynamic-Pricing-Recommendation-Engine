@@ -1,10 +1,20 @@
-import sklearn; print(sklearn.__version__)
 import streamlit as st
 import pandas as pd
 import numpy as np
-import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.metrics import r2_score, mean_absolute_error
+from xgboost import XGBRegressor
 import matplotlib.pyplot as plt
-# Load Data
+import seaborn as sns
+
+st.set_page_config(page_title="Dynamic Pricing Engine", layout="wide", initial_sidebar_state="expanded")
+
+# -------------------
+# Data Loading & Caching
+# -------------------
+@st.cache_data
 def load_data():
     df = pd.read_excel("Dynamic Pricing Engine.xlsx", engine="openpyxl")
     df.columns = df.columns.str.strip().str.replace(' ', '_').str.lower()
@@ -15,70 +25,88 @@ def load_data():
 
 df = load_data()
 
-from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_absolute_error
-import pandas as pd
+@st.cache_resource
+def train_model(df):
+    df_ml = pd.get_dummies(df.copy(), columns=['promotion'], drop_first=True)
+    X = df_ml[['final_price', 'competitor_price', 'discount_percent', 'rating', 'promotion_True']]
+    y = df_ml['units_sold']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = XGBRegressor()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    metrics = {"R²": r2_score(y_test, y_pred), "MAE": mean_absolute_error(y_test, y_pred)}
+    return model, metrics
 
-# Select features (remove 'promotion' because it will be replaced by 'promotion_True')
-features = ['final_price', 'competitor_price', 'discount_percent', 'rating']
-df_ml = df.copy()
-df_ml = pd.get_dummies(df_ml, columns=['promotion'], drop_first=True)
+model, metrics = train_model(df)
 
-X = df_ml[features + ['promotion_True']]
-y = df_ml['units_sold']
+@st.cache_data
+def get_clusters(df):
+    feats = ['final_price', 'units_sold', 'discount_percent']
+    X = StandardScaler().fit_transform(df[feats])
+    kmeans = KMeans(n_clusters=3, random_state=42)
+    df['price_cluster'] = kmeans.fit_predict(X)
+    return df
 
-# Train-Test Split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+df = get_clusters(df)
 
-# Train Model
-model = LinearRegression()
-model.fit(X_train, y_train)
+# -------------------
+# App Layout
+# -------------------
+st.title("Dynamic Pricing Engine")
+st.sidebar.success("Select a page above.")
 
-# Evaluation
-y_pred = model.predict(X_test)
-print("R² Score:", r2_score(y_test, y_pred))
-print("MAE:", mean_absolute_error(y_test, y_pred))
+tab1, tab2, tab3 = st.tabs(["💡 Prediction", "📊 Analytics", "📈 Elasticity Insights"])
 
-# Group by product or category
-df_elasticity = df.groupby('category')[['final_price', 'units_sold']].mean()
-df_elasticity['elasticity'] = (
-    df_elasticity['units_sold'].pct_change() / df_elasticity['final_price'].pct_change()
-)
-df_elasticity
+# -------------------
+# 1. Prediction Tab
+# -------------------
+with tab1:
+    st.header("Predict Sales Volume")
+    cols = st.columns(5)
+    price = cols[0].slider("Set price:", 100, 5000, step=100)
+    competitor_price = cols[1].slider("Competitor Price:", 100, 5000, step=100)
+    discount = cols[2].slider("Discount %", 0, 50, step=5)
+    rating = cols[3].slider("Rating", 1.0, 5.0, step=0.1)
+    promo = cols[4].checkbox("Promotion Active?")
+    input_df = pd.DataFrame([{
+        'final_price': price,
+        'competitor_price': competitor_price,
+        'discount_percent': discount,
+        'rating': rating,
+        'promotion_True': int(promo)
+    }])
+    pred = model.predict(input_df)
+    st.metric("Predicted Sales Volume", int(pred[0]))
+    st.caption(f"Model R²: {metrics['R²']:.2f}, MAE: {metrics['MAE']:.0f}")
 
-#Elasticity Interpretation
-    #Elasticity < -1 → highly price-sensitive
-    #Elasticity > -1 → price-insensitive or luxury items
+# -------------------
+# 2. Analytics Tab
+# -------------------
+with tab2:
+    st.header("Clustering Analysis")
+    st.write("Products segmented by price, units sold, and discounts.")
+    fig, ax = plt.subplots()
+    sns.scatterplot(x='final_price', y='units_sold', hue='price_cluster', data=df, palette='Set2', ax=ax)
+    st.pyplot(fig)
+    st.dataframe(df[['category', 'final_price', 'units_sold', 'discount_percent', 'price_cluster']])
 
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+# -------------------
+# 3. Elasticity Insights Tab
+# -------------------
+with tab3:
+    st.header("Price Elasticity by Category")
+    eltab = df.groupby('category')[['final_price', 'units_sold']].mean()
+    eltab['elasticity'] = (
+        eltab['units_sold'].pct_change() / 
+        eltab['final_price'].pct_change()
+    )
+    st.dataframe(eltab.style.format({"elasticity": "{:.2f}"}))
+    st.markdown("""
+        **Elasticity interpretation:**  
+        - Elasticity < -1: highly price-sensitive  
+        - Elasticity > -1: price-insensitive/luxury items
+    """)
 
-X_cluster = df[['final_price', 'units_sold', 'discount_percent']]
-X_scaled = StandardScaler().fit_transform(X_cluster)
-
-kmeans = KMeans(n_clusters=3)
-df['price_cluster'] = kmeans.fit_predict(X_scaled)
-
-from xgboost import XGBRegressor
-
-model = XGBRegressor()
-model.fit(X_train, y_train)
-
-price = st.slider("Set price:", 100, 5000, step=100)
-competitor_price = st.slider("Competitor Price:", 100, 5000, step=100)
-discount = st.slider("Discount %", 0, 50, step=5)
-rating = st.slider("Rating", 1.0, 5.0, step=0.1)
-promo = st.checkbox("Promotion Active?")
-
-input_dict = {
-    'final_price': price,
-    'competitor_price': competitor_price,
-    'discount_percent': discount,
-    'rating': rating,
-    'promotion_True': int(promo)
-}
-input_df = pd.DataFrame([input_dict])
-
-predicted_sales = model.predict(input_df)
-st.metric("Predicted Sales Volume", int(predicted_sales[0]))
+# -------------------
+# End
+# -------------------
